@@ -1,25 +1,43 @@
 package com.guagua.test
 
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import android.view.MenuItem
-import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.preferencesKey
+import androidx.datastore.preferences.createDataStore
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.LinearSnapHelper
 import androidx.recyclerview.widget.PagerSnapHelper
 import androidx.recyclerview.widget.RecyclerView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class AndroidDanActivity : AppCompatActivity() {
 
     private lateinit var recyclerView: RecyclerView
     private var adapter: AndroidDanAdapter? = null
 
+    private val dataStore: DataStore<Preferences> = createDataStore(name = "Setting")
+    private val EXAMPLE_COUNTER = preferencesKey<Int>("example_counter")
+    private val EXAMPLE_COUNTER1 = preferencesKey<Int>("example_counter1")
+    private val EXAMPLE_COUNTER2 = preferencesKey<Int>("example_counter2")
+
+    private var index = -1
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_android_dan)
 
-        title = if (intent.getIntExtra("Type", -1) == 1) "编译单选" else if (intent.getIntExtra("Type", -1) == 2) "编译多选" else "安卓单选"
+        index = intent.getIntExtra("Type", -1)
+        title = if (index == 1) "编译单选" else if (index == 2) "编译多选" else "安卓单选"
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
         recyclerView = findViewById(R.id.recyclerView)
@@ -30,6 +48,48 @@ class AndroidDanActivity : AppCompatActivity() {
         recyclerView.adapter = adapter
         val snapHelper = PagerSnapHelper()
         snapHelper.attachToRecyclerView(recyclerView)
+        val exampleCounterFlow: Flow<Int> = dataStore.data
+            .map { preferences ->
+                preferences[when (index) {
+                    1 -> EXAMPLE_COUNTER
+                    2 -> EXAMPLE_COUNTER1
+                    else -> EXAMPLE_COUNTER2
+                }] ?: 0
+            }
+        lifecycleScope.launch(Dispatchers.IO) {
+            exampleCounterFlow.collectLatest {
+                withContext(Dispatchers.Main) {
+                    Log.d("ssss", "it =-=== $it")
+                    recyclerView.scrollToPosition(it)
+                }
+            }
+        }
+
+        recyclerView.addOnScrollListener(
+            RecyclerViewPageChangeListenerHelper(snapHelper,
+                object : RecyclerViewPageChangeListenerHelper.OnPageChangeListener {
+                    override fun onScrollStateChanged(
+                        recyclerView: RecyclerView,
+                        newState: Int
+                    ) {
+                    }
+
+                    override fun onScrolled(
+                        recyclerView: RecyclerView,
+                        dx: Int,
+                        dy: Int
+                    ) {
+                    }
+
+                    override fun onPageSelected(position: Int) {
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            Log.d("ssss", "====sssss======================")
+                            incrementCounter(position)
+                        }
+                    }
+                })
+        )
+
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
@@ -39,5 +99,15 @@ class AndroidDanActivity : AppCompatActivity() {
             return true
         }
         return super.onOptionsItemSelected(item)
+    }
+
+    private suspend fun incrementCounter(position: Int) {
+        dataStore.edit { settings ->
+            settings[when (index) {
+                1 -> EXAMPLE_COUNTER
+                2 -> EXAMPLE_COUNTER1
+                else -> EXAMPLE_COUNTER2
+            }] = position
+        }
     }
 }
